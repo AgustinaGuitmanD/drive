@@ -63,8 +63,7 @@ public class Archivo {
     }
 
     public void renombrar(String nuevoNombre, Instant ahora) {
-
-        this.nombre = textoObligatorio(nombre, "El nombre", 255);
+        this.nombre = textoObligatorio(nuevoNombre, "El nombre", 255);
         this.fechaModificacion = ahora;
     }
 

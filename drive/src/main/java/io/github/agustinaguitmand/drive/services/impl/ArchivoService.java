@@ -1,13 +1,19 @@
 package io.github.agustinaguitmand.drive.services.impl;
 import io.github.agustinaguitmand.drive.exceptions.ArchivoInvalidoException;
+import io.github.agustinaguitmand.drive.exceptions.ArchivoNoEncontradoException;
+import io.github.agustinaguitmand.drive.exceptions.ConflictoDeVersionException;
 import io.github.agustinaguitmand.drive.exceptions.NombreDuplicadoException;
+import io.github.agustinaguitmand.drive.models.helpers.NombresDeArchivo;
+import io.github.agustinaguitmand.drive.services.IPersonaService;
 import io.github.agustinaguitmand.drive.storage.IBlobStorage;
 import io.github.agustinaguitmand.drive.models.ContenidoArchivo;
 import io.github.agustinaguitmand.drive.models.entities.Archivo;
 import io.github.agustinaguitmand.drive.repositories.IArchivoRepository;
 import io.github.agustinaguitmand.drive.services.IArchivoService;
 import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
+import jakarta.transaction.Transactional;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
@@ -26,15 +32,18 @@ public class ArchivoService implements IArchivoService {
     // archivoRepository: guarda la metadata (nombre, dueño, fechas) en la base.
     // blobStorage: guarda los bytes del archivo (en disco; en producción sería S3).
     // clock: da la hora actual; se inyecta para poder fijarla en los tests.
-    private final IArchivoRepository IArchivoRepository;
+    private final IArchivoRepository archivoRepository;
     private final IBlobStorage blobStorage;
     private final Clock clock;
+    private final IPersonaService personaService;
+    private static final int MAXIMO_DE_COPIAS = 5000;
 
-    public ArchivoService(IArchivoRepository IArchivoRepository,
+    public ArchivoService(IArchivoRepository archivoRepository,
                           IBlobStorage blobStorage,
-                          Clock clock) {
-        this.IArchivoRepository = IArchivoRepository;
+                          IPersonaService personaService, Clock clock) {
+        this.archivoRepository = archivoRepository;
         this.blobStorage = blobStorage;
+        this.personaService = personaService;
         this.clock = clock;
     }
 
@@ -46,8 +55,9 @@ public class ArchivoService implements IArchivoService {
     @Override
     public Archivo subir(UUID usuarioId, MultipartFile archivo) {
         // 1. Validar, antes de escribir nada
+        personaService.verificarQueExista(usuarioId);
         validarQueTengaContenido(archivo);
-        String nombre = nombreDe(archivo);
+        String nombre = nombreLibre(usuarioId, archivo.getOriginalFilename());
         String contentType = archivo.getContentType();
         TipoArchivo tipo = TipoArchivo.desdeContentType(contentType);
         verificarNombreDisponible(usuarioId, nombre);
@@ -59,7 +69,7 @@ public class ArchivoService implements IArchivoService {
         try {
             Archivo nuevo = new Archivo(usuarioId, nombre, tipo, contentType,
                     archivo.getSize(), storageKey, Instant.now(clock));
-            return IArchivoRepository.save(nuevo);
+            return archivoRepository.save(nuevo);
         } catch (RuntimeException e) {
             borrarContenidoSinFallar(storageKey);
             throw e;
@@ -67,30 +77,40 @@ public class ArchivoService implements IArchivoService {
     }
 
 
-
     @Override
     public List<Archivo> listarArchivosUsuario(UUID usuarioId) {
-        return List.of();
+        return archivoRepository.findByDuenioIdOrderByFechaModificacionDesc(usuarioId);
     }
 
     @Override
     public ContenidoArchivo obtenerContenido(UUID usuarioId, UUID archivoId) {
-        return null;
+        Archivo archivo = buscarArchivoelUsuario(usuarioId, archivoId);
+        return new ContenidoArchivo(
+                archivo.getNombre(),
+                MediaType.parseMediaType(archivo.getContentType()),
+                blobStorage.abrir(archivo.getStorageKey()));
     }
 
     @Override
+    @Transactional
     public Archivo renombrar(UUID usuarioId, UUID archivoId, String nuevoNombre, long version) {
-        return null;
+        Archivo archivo = buscarArchivoelUsuario(usuarioId, archivoId);
+        verificarVersion(archivo, version);
+        if (!archivo.getNombre().equals(nuevoNombre)) {
+            verificarNombreDisponible(usuarioId, nuevoNombre);
+        }
+        archivo.renombrar(nuevoNombre, Instant.now(clock));
+        return archivoRepository.saveAndFlush(archivo);
     }
 
     @Override
     public void borrar(UUID usuarioId, UUID archivoId) {
-
+        // TODO
     }
 
     @Override
     public Archivo obtenerMetadata(UUID usuarioId, UUID archivoId) {
-        return null;
+        return buscarArchivoelUsuario(usuarioId, archivoId);
     }
 
     private void validarQueTengaContenido(MultipartFile archivo) {
@@ -107,10 +127,27 @@ public class ArchivoService implements IArchivoService {
         return nombre;
     }
 
+
+    // TODO: ver si lo saco
     private void verificarNombreDisponible(UUID usuarioId, String nombre) {
-        if (IArchivoRepository.existsByDuenioIdAndNombre(usuarioId, nombre)) {
+        if (archivoRepository.existsByDuenioIdAndNombre(usuarioId, nombre)) {
             throw new NombreDuplicadoException(nombre);
         }
+    }
+
+
+    // Si el nombre está libre lo usa tal cual; si no, prueba "nombre (1)", "nombre (2)"...
+    private String nombreLibre(UUID usuarioId, String nombre) {
+        if (!archivoRepository.existsByDuenioIdAndNombre(usuarioId, nombre)) {
+            return nombre;
+        }
+        for (int numero = 1; numero <= MAXIMO_DE_COPIAS; numero++) {
+            String candidato = NombresDeArchivo.conNumero(nombre, numero);
+            if (!archivoRepository.existsByDuenioIdAndNombre(usuarioId, candidato)) {
+                return candidato;
+            }
+        }
+        throw new NombreDuplicadoException(nombre);
     }
 
     private InputStream leerContenido(MultipartFile archivo) {
@@ -127,6 +164,20 @@ public class ArchivoService implements IArchivoService {
             blobStorage.borrar(storageKey);
         } catch (RuntimeException e) {
             log.warn("No se pudo borrar el contenido {}; queda huérfano en disco", storageKey, e);
+        }
+    }
+
+    // Busca siempre por id Y dueño: si el archivo es de otro usuario, es como si no existiera.
+    private Archivo buscarArchivoelUsuario(UUID usuarioId, UUID archivoId) {
+        return archivoRepository.findByIdAndDuenioId(archivoId, usuarioId)
+                .orElseThrow(() -> new ArchivoNoEncontradoException(archivoId));
+    }
+
+    // El cliente manda la versión que vio. Si no coincide, alguien modificó
+    // el archivo en el medio y no pisamos su cambio.
+    private void verificarVersion(Archivo archivo, long versionEsperada) {
+        if (archivo.getVersion() != versionEsperada) {
+            throw new ConflictoDeVersionException(archivo.getId(), versionEsperada, archivo.getVersion());
         }
     }
 

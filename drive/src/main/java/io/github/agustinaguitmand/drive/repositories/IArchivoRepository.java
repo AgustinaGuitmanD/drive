@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface IArchivoRepository extends JpaRepository<Archivo, UUID> {
-    List<Archivo> findByDuenioId(UUID duenioId);
     Optional<Archivo> findByIdAndDuenioId(UUID id, UUID duenioId);
     boolean existsByDuenioIdAndNombre(UUID duenioId, String nombre);
+    List<Archivo> findByDuenioIdOrderByFechaModificacionDesc(UUID duenioId);
 }
