@@ -1,0 +1,16 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: drive-mysql
+    environment:
+      MYSQL_DATABASE: drive
+      MYSQL_USER: ${DB_USER:-drive}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-drive}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:
