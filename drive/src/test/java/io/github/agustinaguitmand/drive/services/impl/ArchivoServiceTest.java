@@ -18,6 +18,10 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.mockito.InOrder;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -120,5 +124,54 @@ class ArchivoServiceTest {
         Archivo subido = service.subir(usuario, otraFoto);
 
         assertEquals("foto (1).png", subido.getNombre());
+    }
+
+    @Test
+    void borrarEliminaPrimeroLaMetadataYDespuesElContenido() {
+        UUID usuario = UUID.randomUUID();
+        Archivo archivo = archivoGuardado(usuario);
+
+        service.borrar(usuario, archivo.getId());
+
+        InOrder orden = inOrder(archivoRepository, blobStorage);
+        orden.verify(archivoRepository).delete(archivo);
+        orden.verify(blobStorage).borrar("clave-1");
+    }
+
+    @Test
+    void siFallaElBorradoEnDiscoLaMetadataQuedaBorradaIgual() {
+        UUID usuario = UUID.randomUUID();
+        Archivo archivo = archivoGuardado(usuario);
+        doThrow(new UncheckedIOException(new IOException("disco no disponible")))
+                .when(blobStorage).borrar("clave-1");
+
+        assertDoesNotThrow(() -> service.borrar(usuario, archivo.getId()));
+
+        verify(archivoRepository).delete(archivo);
+    }
+
+    @Test
+    void unUsuarioNoPuedeBorrarUnArchivoDeOtro() {
+        UUID otroUsuario = UUID.randomUUID();
+        UUID archivoId = UUID.randomUUID();
+        when(archivoRepository.findByIdAndDuenioId(archivoId, otroUsuario))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ArchivoNoEncontradoException.class,
+                () -> service.borrar(otroUsuario, archivoId));
+
+        verify(archivoRepository, never()).delete(any());
+        verifyNoInteractions(blobStorage);
+    }
+
+    // Metodo auxiliar: Crea un archivo del usuario, creado una hora antes del reloj del test,
+    // y programa el repositorio para que lo encuentre.
+    private Archivo archivoGuardado(UUID usuario) {
+        Instant unaHoraAntes = Instant.now(clock).minusSeconds(3600);
+        Archivo archivo = new Archivo(usuario, "foto.png", TipoArchivo.IMAGEN,
+                "image/png", 3, "clave-1", unaHoraAntes);
+        when(archivoRepository.findByIdAndDuenioId(archivo.getId(), usuario))
+                .thenReturn(Optional.of(archivo));
+        return archivo;
     }
 }

@@ -11,7 +11,8 @@ import io.github.agustinaguitmand.drive.models.entities.Archivo;
 import io.github.agustinaguitmand.drive.repositories.IArchivoRepository;
 import io.github.agustinaguitmand.drive.services.IArchivoService;
 import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
-import jakarta.transaction.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -36,7 +37,7 @@ public class ArchivoService implements IArchivoService {
     private final IBlobStorage blobStorage;
     private final Clock clock;
     private final IPersonaService personaService;
-    private static final int MAXIMO_DE_COPIAS = 5000;
+    private static final int MAXIMO_DE_COPIAS = 500;
 
     public ArchivoService(IArchivoRepository archivoRepository,
                           IBlobStorage blobStorage,
@@ -60,7 +61,6 @@ public class ArchivoService implements IArchivoService {
         String nombre = nombreLibre(usuarioId, archivo.getOriginalFilename());
         String contentType = archivo.getContentType();
         TipoArchivo tipo = TipoArchivo.desdeContentType(contentType);
-        verificarNombreDisponible(usuarioId, nombre);
 
         // 2. Guardar los bytes
         String storageKey = blobStorage.guardar(leerContenido(archivo));
@@ -70,6 +70,10 @@ public class ArchivoService implements IArchivoService {
             Archivo nuevo = new Archivo(usuarioId, nombre, tipo, contentType,
                     archivo.getSize(), storageKey, Instant.now(clock));
             return archivoRepository.save(nuevo);
+        } catch (DataIntegrityViolationException e) {
+            borrarContenidoSinFallar(storageKey);
+            // Otra subida simultánea tomó el mismo nombre entre la verificación y el guardado.
+            throw new NombreDuplicadoException(nombre);
         } catch (RuntimeException e) {
             borrarContenidoSinFallar(storageKey);
             throw e;
@@ -84,7 +88,7 @@ public class ArchivoService implements IArchivoService {
 
     @Override
     public ContenidoArchivo obtenerContenido(UUID usuarioId, UUID archivoId) {
-        Archivo archivo = buscarArchivoelUsuario(usuarioId, archivoId);
+        Archivo archivo = buscarArchivoDelUsuario(usuarioId, archivoId);
         return new ContenidoArchivo(
                 archivo.getNombre(),
                 MediaType.parseMediaType(archivo.getContentType()),
@@ -94,23 +98,36 @@ public class ArchivoService implements IArchivoService {
     @Override
     @Transactional
     public Archivo renombrar(UUID usuarioId, UUID archivoId, String nuevoNombre, long version) {
-        Archivo archivo = buscarArchivoelUsuario(usuarioId, archivoId);
+        Archivo archivo = buscarArchivoDelUsuario(usuarioId, archivoId);
         verificarVersion(archivo, version);
         if (!archivo.getNombre().equals(nuevoNombre)) {
             verificarNombreDisponible(usuarioId, nuevoNombre);
         }
         archivo.renombrar(nuevoNombre, Instant.now(clock));
-        return archivoRepository.saveAndFlush(archivo);
+        try {
+            return archivoRepository.saveAndFlush(archivo);
+        } catch (DataIntegrityViolationException e) {
+            // Otro archivo usó ese nombre entre la verificación y el guardado.
+            throw new NombreDuplicadoException(nuevoNombre);
+        }
     }
 
+    /**
+     * Primero se borra la metadata y después el contenido.
+     * Si bien si falla el borrado en disco, queda un archivo huérfano, creo que
+     * al revés sería peor: la metadata quedaría apuntando a un contenido que ya no existe.
+     * Sin @Transactional a propósito: así la base confirma el borrado antes de tocar el disco.
+     */
     @Override
     public void borrar(UUID usuarioId, UUID archivoId) {
-        // TODO
+        Archivo archivo = buscarArchivoDelUsuario(usuarioId, archivoId);
+        archivoRepository.delete(archivo);
+        borrarContenidoSinFallar(archivo.getStorageKey());
     }
 
     @Override
     public Archivo obtenerMetadata(UUID usuarioId, UUID archivoId) {
-        return buscarArchivoelUsuario(usuarioId, archivoId);
+        return buscarArchivoDelUsuario(usuarioId, archivoId);
     }
 
     private void validarQueTengaContenido(MultipartFile archivo) {
@@ -128,7 +145,6 @@ public class ArchivoService implements IArchivoService {
     }
 
 
-    // TODO: ver si lo saco
     private void verificarNombreDisponible(UUID usuarioId, String nombre) {
         if (archivoRepository.existsByDuenioIdAndNombre(usuarioId, nombre)) {
             throw new NombreDuplicadoException(nombre);
@@ -168,7 +184,7 @@ public class ArchivoService implements IArchivoService {
     }
 
     // Busca siempre por id Y dueño: si el archivo es de otro usuario, es como si no existiera.
-    private Archivo buscarArchivoelUsuario(UUID usuarioId, UUID archivoId) {
+    private Archivo buscarArchivoDelUsuario(UUID usuarioId, UUID archivoId) {
         return archivoRepository.findByIdAndDuenioId(archivoId, usuarioId)
                 .orElseThrow(() -> new ArchivoNoEncontradoException(archivoId));
     }
