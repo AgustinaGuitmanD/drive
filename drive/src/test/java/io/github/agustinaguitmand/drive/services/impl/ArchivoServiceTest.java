@@ -8,6 +8,7 @@ import io.github.agustinaguitmand.drive.models.entities.Archivo;
 import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
 import io.github.agustinaguitmand.drive.repositories.IArchivoRepository;
 import io.github.agustinaguitmand.drive.services.IPersonaService;
+import io.github.agustinaguitmand.drive.storage.BlobGuardado;
 import io.github.agustinaguitmand.drive.storage.IBlobStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +71,7 @@ class ArchivoServiceTest {
         UUID usuario = UUID.randomUUID();
         MockMultipartFile foto = new MockMultipartFile(
                 "archivo", "foto.png", "image/png", new byte[]{1, 2, 3});
-        when(blobStorage.guardar(any())).thenReturn("clave-1");
+        when(blobStorage.guardar(any())).thenReturn(new BlobGuardado("clave-1", "checksum-1", 3));
         when(archivoRepository.save(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
 
         service.subir(usuario, foto);
@@ -85,7 +86,7 @@ class ArchivoServiceTest {
         UUID usuario = UUID.randomUUID();
         MockMultipartFile foto = new MockMultipartFile(
                 "archivo", "foto.png", "image/png", new byte[]{1, 2, 3});
-        when(blobStorage.guardar(any())).thenReturn("clave-1");
+        when(blobStorage.guardar(any())).thenReturn(new BlobGuardado("clave-1", "checksum-1", 3));
         // Otra subida simultánea tomó el nombre entre la verificación y el guardado.
         when(archivoRepository.save(any()))
                 .thenThrow(new DataIntegrityViolationException("nombre duplicado"));
@@ -116,7 +117,8 @@ class ArchivoServiceTest {
     void unUsuarioPuedeVerElContenidoDeSuArchivo() {
         UUID usuario = UUID.randomUUID();
         Archivo archivo = new Archivo(usuario, "foto.png", TipoArchivo.IMAGEN,
-                "image/png", 3, "clave-1", Instant.now(clock));
+                "image/png", 3, "clave-1", Instant.now(clock),
+                "checksum-1");
         Resource bytes = new ByteArrayResource(new byte[]{1, 2, 3});
         when(archivoRepository.findByIdAndDuenioId(archivo.getId(), usuario))
                 .thenReturn(Optional.of(archivo));
@@ -127,6 +129,7 @@ class ArchivoServiceTest {
         assertEquals("foto.png", contenido.nombre());
         assertEquals(MediaType.IMAGE_PNG, contenido.tipo());
         assertSame(bytes, contenido.recurso());
+        assertEquals("checksum-1", contenido.checksum());
     }
 
 
@@ -135,7 +138,7 @@ class ArchivoServiceTest {
         UUID usuario = UUID.randomUUID();
         // El usuario ya tiene un "foto.png" guardado.
         when(archivoRepository.existsByDuenioIdAndNombre(usuario, "foto.png")).thenReturn(true);
-        when(blobStorage.guardar(any())).thenReturn("clave-2");
+        when(blobStorage.guardar(any())).thenReturn(new BlobGuardado("clave-2", "checksum-2", 3));
         when(archivoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         MockMultipartFile otraFoto = new MockMultipartFile(
                 "archivo", "foto.png", "image/png", new byte[]{4, 5, 6});
@@ -188,7 +191,8 @@ class ArchivoServiceTest {
     private Archivo archivoGuardado(UUID usuario) {
         Instant unaHoraAntes = Instant.now(clock).minusSeconds(3600);
         Archivo archivo = new Archivo(usuario, "foto.png", TipoArchivo.IMAGEN,
-                "image/png", 3, "clave-1", unaHoraAntes);
+                "image/png", 3, "clave-1", unaHoraAntes,
+                "checksum-1");
         when(archivoRepository.findByIdAndDuenioId(archivo.getId(), usuario))
                 .thenReturn(Optional.of(archivo));
         return archivo;

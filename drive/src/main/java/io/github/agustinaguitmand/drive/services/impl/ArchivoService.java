@@ -6,16 +6,19 @@ import io.github.agustinaguitmand.drive.exceptions.ConflictoDeVersionException;
 import io.github.agustinaguitmand.drive.exceptions.NombreDuplicadoException;
 import io.github.agustinaguitmand.drive.models.ContenidoArchivo;
 import io.github.agustinaguitmand.drive.models.entities.Archivo;
+import io.github.agustinaguitmand.drive.models.entities.RevisionArchivo;
 import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
 import io.github.agustinaguitmand.drive.models.helpers.NombresDeArchivo;
 import io.github.agustinaguitmand.drive.repositories.IArchivoRepository;
 import io.github.agustinaguitmand.drive.services.IArchivoService;
 import io.github.agustinaguitmand.drive.services.IPersonaService;
+import io.github.agustinaguitmand.drive.storage.BlobGuardado;
 import io.github.agustinaguitmand.drive.storage.IBlobStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -65,19 +68,19 @@ public class ArchivoService implements IArchivoService {
         TipoArchivo tipo = TipoArchivo.desdeContentType(contentType);
 
         // 2. Guardar los bytes
-        String storageKey = blobStorage.guardar(leerContenido(archivo));
+        BlobGuardado blob = blobStorage.guardar(leerContenido(archivo));
 
         // 3. Guardar la metadata; si falla, no deja bytes huérfanos
         try {
             Archivo nuevo = new Archivo(usuarioId, nombre, tipo, contentType,
-                    archivo.getSize(), storageKey, Instant.now(clock));
+                    archivo.getSize(), blob.storageKey(), Instant.now(clock), blob.sha256());
             return archivoRepository.save(nuevo);
         } catch (DataIntegrityViolationException e) {
-            borrarContenidoSinFallar(storageKey);
+            borrarContenidoSinFallar(blob.storageKey());
             // Otra subida simultánea tomó el mismo nombre entre la verificación y el guardado.
             throw new NombreDuplicadoException(nombre);
         } catch (RuntimeException e) {
-            borrarContenidoSinFallar(storageKey);
+            borrarContenidoSinFallar(blob.storageKey());
             throw e;
         }
     }
@@ -94,7 +97,8 @@ public class ArchivoService implements IArchivoService {
         return new ContenidoArchivo(
                 archivo.getNombre(),
                 MediaType.parseMediaType(archivo.getContentType()),
-                blobStorage.abrir(archivo.getStorageKey()));
+                blobStorage.abrir(archivo.getStorageKey()),
+                archivo.getChecksum());
     }
 
     @Override
@@ -115,16 +119,18 @@ public class ArchivoService implements IArchivoService {
     }
 
     /**
-     * Primero se borra la metadata y después el contenido.
-     * Si bien si falla el borrado en disco, queda un archivo huérfano, creo que
-     * al revés sería peor: la metadata quedaría apuntando a un contenido que ya no existe.
-     * Sin @Transactional a propósito: así la base confirma el borrado antes de tocar el disco.
+     * Primero se borra la metadata (el archivo y, en cascada, todas sus revisiones)
+     * y después los bytes de cada revisión.Si bien si falla el borrado en disco,
+     * queda un archivo huérfano, creo que al revés sería peor: la metadata quedaría
+     * apuntando a un contenido que ya no existe. Sin @Transactional a propósito:
+     * así la base confirma el borrado antes de tocar el disco.
      */
     @Override
     public void borrar(UUID usuarioId, UUID archivoId) {
         Archivo archivo = buscarArchivoDelUsuario(usuarioId, archivoId);
+        List<String> storageKeys = archivoRepository.findStorageKeysDeRevisiones(archivoId);
         archivoRepository.delete(archivo);
-        borrarContenidoSinFallar(archivo.getStorageKey());
+        storageKeys.forEach(this::borrarContenidoSinFallar);
     }
 
     @Override
@@ -132,12 +138,59 @@ public class ArchivoService implements IArchivoService {
         return buscarArchivoDelUsuario(usuarioId, archivoId);
     }
 
+    @Override
+    @Transactional
+    public Archivo subirRevision(UUID usuarioId, UUID archivoId, MultipartFile contenido, long versionEsperada) {
+        // 1. Validar, antes de escribir nada
+        Archivo archivo = buscarArchivoDelUsuario(usuarioId, archivoId);
+        verificarVersion(archivo, versionEsperada);
+        validarQueTengaContenido(contenido);
+        String contentType = contenido.getContentType();
+        archivo.verificarTipoCompatible(contentType);
+
+        // 2. Guardar los bytes
+        BlobGuardado blob = blobStorage.guardar(leerContenido(contenido));
+
+        // 3. Registrar la revisión; si falla, no deja bytes huérfanos
+        try {
+            archivo.agregarRevision(blob.storageKey(), blob.sha256(), blob.tamanio(),
+                    contentType, Instant.now(clock));
+            return archivoRepository.saveAndFlush(archivo);
+        } catch (ObjectOptimisticLockingFailureException | DataIntegrityViolationException e) {
+            borrarContenidoSinFallar(blob.storageKey());
+            // Otra subida modificó el archivo entre la verificación y el guardado: la primera gana.
+            throw new ConflictoDeVersionException(archivoId, versionEsperada, archivo.getVersion());
+        } catch (RuntimeException e) {
+            borrarContenidoSinFallar(blob.storageKey());
+            throw e;
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RevisionArchivo> listarRevisiones(UUID usuarioId, UUID archivoId, int limite) {
+        Archivo archivo = buscarArchivoDelUsuario(usuarioId, archivoId);
+        return archivo.ultimasRevisiones(limite);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ContenidoArchivo obtenerContenidoDeRevision(UUID usuarioId, UUID archivoId, int numero) {
+        Archivo archivo = buscarArchivoDelUsuario(usuarioId, archivoId);
+        RevisionArchivo revision = archivo.revision(numero);
+        return new ContenidoArchivo(
+                archivo.getNombre(),
+                MediaType.parseMediaType(revision.getContentType()),
+                blobStorage.abrir(revision.getStorageKey()),
+                revision.getChecksum());
+    }
+
+
     private void validarQueTengaContenido(MultipartFile archivo) {
         if (archivo.isEmpty()) {
             throw new ArchivoInvalidoException("El archivo está vacío");
         }
     }
-
 
     private void verificarNombreDisponible(UUID usuarioId, String nombre) {
         if (archivoRepository.existsByDuenioIdAndNombre(usuarioId, nombre)) {

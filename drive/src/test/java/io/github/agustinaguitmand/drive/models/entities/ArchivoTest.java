@@ -43,7 +43,7 @@ class ArchivoTest {
     void noSePuedeCrearConTamanioCero() {
         assertThrows(ArchivoInvalidoException.class, () ->
                 new Archivo(UUID.randomUUID(), "foto.png", TipoArchivo.IMAGEN,
-                        "image/png", 0, "clave", AHORA));
+                        "image/png", 0, "clave", AHORA, "checksum-1"));
     }
 
     @Test
@@ -70,6 +70,6 @@ class ArchivoTest {
     // Arma un archivo válido cambiando solo el nombre, para no repetir el constructor en cada test.
     private static Archivo archivoLlamado(String nombre) {
         return new Archivo(UUID.randomUUID(), nombre, TipoArchivo.IMAGEN,
-                "image/png", 100, "clave", AHORA);
+                "image/png", 100, "clave", AHORA, "checksum-1");
     }
 }
