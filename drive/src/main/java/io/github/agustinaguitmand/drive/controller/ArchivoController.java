@@ -88,6 +88,10 @@ public class ArchivoController {
         return ResponseEntity.ok()
                 .contentType(contenido.tipo())
                 .header(HttpHeaders.CONTENT_DISPOSITION, mostrarEnNavegador(contenido.nombre()))
+                // El navegador respeta el Content-Type declarado y no intenta adivinar otro.
+                // Deshabilita el MIME-sniffing del navegador para evitar que interprete archivos
+                // estáticos como código ejecutable (prevención de XSS).
+                .header("X-Content-Type-Options", "nosniff")
                 .body(contenido.recurso());
     }
 
