@@ -73,7 +73,7 @@ public class ArchivoService implements IArchivoService {
         // 3. Guardar la metadata; si falla, no deja bytes huérfanos
         try {
             Archivo nuevo = new Archivo(usuarioId, nombre, tipo, contentType,
-                    archivo.getSize(), blob.storageKey(), Instant.now(clock), blob.sha256());
+                    blob.tamanio(), blob.storageKey(), Instant.now(clock), blob.sha256());
             return archivoRepository.save(nuevo);
         } catch (DataIntegrityViolationException e) {
             borrarContenidoSinFallar(blob.storageKey());

@@ -26,7 +26,7 @@ public class RevisionArchivo {
     @Column(nullable = false, updatable = false)
     private int numero;
 
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false, updatable = false, unique = true)
     private String storageKey;
 
     @Column(nullable = false, updatable = false, length = 64)
