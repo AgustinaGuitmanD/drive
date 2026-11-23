@@ -30,12 +30,6 @@ public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
     }
 
 
-    // 404: el archivo no existe o es de otro usuario (no distinguimos para no revelar que existe).
-    @ExceptionHandler(ArchivoNoEncontradoException.class)
-    public ProblemDetail noEncontrado(ArchivoNoEncontradoException e) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
-    }
-
     // 409: choca con el estado actual (nombre o correo repetido, versión vieja).
     @ExceptionHandler({NombreDuplicadoException.class, CorreoDuplicadoException.class,
                        ConflictoDeVersionException.class})

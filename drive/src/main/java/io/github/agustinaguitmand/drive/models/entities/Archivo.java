@@ -81,6 +81,7 @@ public class Archivo {
         this.duenioId = duenioId;
         this.tipo = tipo;
         this.fechaCreacion = ahora;
+        this.contentType = contentType;
         // Un archivo nunca existe sin contenido: nace con su revisión 1.
         agregarRevision(storageKey, checksum, tamanio, contentType, ahora);
     }

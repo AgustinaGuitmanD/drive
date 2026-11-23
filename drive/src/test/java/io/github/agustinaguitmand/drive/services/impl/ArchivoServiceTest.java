@@ -28,6 +28,7 @@ import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -191,10 +192,12 @@ class ArchivoServiceTest {
     private Archivo archivoGuardado(UUID usuario) {
         Instant unaHoraAntes = Instant.now(clock).minusSeconds(3600);
         Archivo archivo = new Archivo(usuario, "foto.png", TipoArchivo.IMAGEN,
-                "image/png", 3, "clave-1", unaHoraAntes,
-                "checksum-1");
+                "image/png", 3, "clave-1", unaHoraAntes, "checksum-1");
         when(archivoRepository.findByIdAndDuenioId(archivo.getId(), usuario))
                 .thenReturn(Optional.of(archivo));
+        // Las claves de los bytes de sus revisiones, que borrar() necesita para limpiar el disco.
+        lenient().when(archivoRepository.findStorageKeysDeRevisiones(archivo.getId()))
+                .thenReturn(List.of("clave-1"));
         return archivo;
     }
 }
