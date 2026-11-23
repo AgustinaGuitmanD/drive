@@ -1,22 +1,25 @@
 package io.github.agustinaguitmand.drive.services.impl;
+
 import io.github.agustinaguitmand.drive.exceptions.ArchivoInvalidoException;
 import io.github.agustinaguitmand.drive.exceptions.ArchivoNoEncontradoException;
 import io.github.agustinaguitmand.drive.exceptions.ConflictoDeVersionException;
 import io.github.agustinaguitmand.drive.exceptions.NombreDuplicadoException;
-import io.github.agustinaguitmand.drive.models.helpers.NombresDeArchivo;
-import io.github.agustinaguitmand.drive.services.IPersonaService;
-import io.github.agustinaguitmand.drive.storage.IBlobStorage;
 import io.github.agustinaguitmand.drive.models.ContenidoArchivo;
 import io.github.agustinaguitmand.drive.models.entities.Archivo;
+import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
+import io.github.agustinaguitmand.drive.models.helpers.NombresDeArchivo;
 import io.github.agustinaguitmand.drive.repositories.IArchivoRepository;
 import io.github.agustinaguitmand.drive.services.IArchivoService;
-import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.transaction.annotation.Transactional;
+import io.github.agustinaguitmand.drive.services.IPersonaService;
+import io.github.agustinaguitmand.drive.storage.IBlobStorage;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -24,7 +27,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.slf4j.Logger;
 
 @Service
 public class ArchivoService implements IArchivoService {
@@ -134,14 +136,6 @@ public class ArchivoService implements IArchivoService {
         if (archivo.isEmpty()) {
             throw new ArchivoInvalidoException("El archivo está vacío");
         }
-    }
-
-    private String nombreDe(MultipartFile archivo) {
-        String nombre = archivo.getOriginalFilename();
-        if (nombre == null || nombre.isBlank()) {
-            throw new ArchivoInvalidoException("El archivo no tiene nombre");
-        }
-        return nombre;
     }
 
 
