@@ -1,6 +1,7 @@
 package io.github.agustinaguitmand.drive.services.impl;
 
 import io.github.agustinaguitmand.drive.exceptions.ArchivoNoEncontradoException;
+import io.github.agustinaguitmand.drive.exceptions.NombreDuplicadoException;
 import io.github.agustinaguitmand.drive.exceptions.UsuarioNoRegistradoException;
 import io.github.agustinaguitmand.drive.models.ContenidoArchivo;
 import io.github.agustinaguitmand.drive.models.entities.Archivo;
@@ -12,17 +13,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.mockito.InOrder;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -78,6 +79,24 @@ class ArchivoServiceTest {
         verify(archivoRepository).save(guardado.capture());
         assertEquals(usuario, guardado.getValue().getDuenioId());
     }
+
+    @Test
+    void siLaBaseRechazaElNombreSeBorranLosBytesYSeInformaDuplicado() {
+        UUID usuario = UUID.randomUUID();
+        MockMultipartFile foto = new MockMultipartFile(
+                "archivo", "foto.png", "image/png", new byte[]{1, 2, 3});
+        when(blobStorage.guardar(any())).thenReturn("clave-1");
+        // Otra subida simultánea tomó el nombre entre la verificación y el guardado.
+        when(archivoRepository.save(any()))
+                .thenThrow(new DataIntegrityViolationException("nombre duplicado"));
+
+        assertThrows(NombreDuplicadoException.class, () -> service.subir(usuario, foto));
+
+        // No quedan bytes huérfanos.
+        verify(blobStorage).borrar("clave-1");
+    }
+
+
 
     @Test
     void unUsuarioNoPuedeVerElContenidoDeUnArchivoDeOtro() {
