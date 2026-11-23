@@ -2,14 +2,16 @@ package io.github.agustinaguitmand.drive.models.entities;
 
 import io.github.agustinaguitmand.drive.exceptions.ArchivoInvalidoException;
 import jakarta.persistence.*;
+import lombok.Getter;
+
 import java.time.Instant;
 import java.util.UUID;
-import lombok.Getter;
 
 import static io.github.agustinaguitmand.drive.models.helpers.Validaciones.textoObligatorio;
 
 @Entity
 @Getter
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"duenio_id", "nombre"}))
 public class Archivo {
 
     @Id
@@ -23,7 +25,7 @@ public class Archivo {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private TipoArchivo tipo;       // Imagen, video, audio, doc
+    private TipoArchivo tipo;       // Imagen, doc
 
     @Column(nullable = false, length = 100)
     private String contentType;
@@ -51,7 +53,7 @@ public class Archivo {
         if (tamanio <= 0) {
             throw new ArchivoInvalidoException("El archivo está vacío");
         }
-        this.nombre = textoObligatorio(nombre, "El nombre", 255);
+        this.nombre = textoObligatorio(nombre, "El nombre", LARGO_MAXIMO_NOMBRE);
         this.id = UUID.randomUUID();
         this.duenioId = duenioId;
         this.tipo = tipo;
