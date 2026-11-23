@@ -68,4 +68,11 @@ public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Ocurrió un error inesperado");
     }
+
+    // 404: el archivo (o la revisión) no existe, o es de otro usuario
+    // (no distinguimos, para no revelar que existe).
+    @ExceptionHandler({ArchivoNoEncontradoException.class, RevisionNoEncontradaException.class})
+    public ProblemDetail noEncontrado(RuntimeException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
 }

@@ -31,13 +31,19 @@ public class Archivo {
     @Column(nullable = false)
     private TipoArchivo tipo;       // Imagen, doc
 
+
     @Column(nullable = false, length = 100)
     private String contentType;
 
+    @Column(nullable = false)
     private long tamanio;
 
-    @Column(nullable = false, unique = true, updatable = false)
+    @Column(nullable = false, unique = true)
     private String storageKey;
+
+    // Huella SHA-256 del contenido, en hexadecimal (64 caracteres).
+    @Column(nullable = false, length = 64)
+    private String checksum;
 
     @Column(nullable = false, updatable = false)
     private Instant fechaCreacion;
@@ -56,34 +62,45 @@ public class Archivo {
     @Column(nullable = false)
     private int revisionActual;
 
+
     @OneToMany(mappedBy = "archivo", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("numero DESC")
     @Getter(AccessLevel.NONE)
     private List<RevisionArchivo> revisiones = new ArrayList<>();
 
-    // Huella SHA-256 del contenido, en hexadecimal (64 caracteres).
-    @Column(nullable = false, length = 64, updatable = false)
-    private String checksum;
 
     private static final int LARGO_MAXIMO_NOMBRE = 255;
 
-    protected Archivo() { }
+    protected Archivo() {
+    }
 
     public Archivo(UUID duenioId, String nombre, TipoArchivo tipo, String contentType,
                    long tamanio, String storageKey, Instant ahora, String checksum) {
+        this.id = UUID.randomUUID();
+        this.nombre = textoObligatorio(nombre, "El nombre", LARGO_MAXIMO_NOMBRE);
+        this.duenioId = duenioId;
+        this.tipo = tipo;
+        this.fechaCreacion = ahora;
+        // Un archivo nunca existe sin contenido: nace con su revisión 1.
+        agregarRevision(storageKey, checksum, tamanio, contentType, ahora);
+    }
+
+    public RevisionArchivo agregarRevision(String storageKey, String checksum, long tamanio,
+                                           String contentType, Instant ahora) {
         if (tamanio <= 0) {
             throw new ArchivoInvalidoException("El archivo está vacío");
         }
-        this.nombre = textoObligatorio(nombre, "El nombre", LARGO_MAXIMO_NOMBRE);
-        this.id = UUID.randomUUID();
-        this.duenioId = duenioId;
-        this.tipo = tipo;
-        this.contentType = contentType;
-        this.tamanio = tamanio;
+        verificarTipoCompatible(contentType);
+        revisionActual++;
         this.storageKey = storageKey;
-        this.fechaCreacion = ahora;
-        this.fechaModificacion = ahora;
         this.checksum = checksum;
+        this.tamanio = tamanio;
+        this.contentType = contentType;
+        this.fechaModificacion = ahora;
+        RevisionArchivo revision = new RevisionArchivo(this, revisionActual, storageKey,
+                checksum, tamanio, contentType, ahora);
+        revisiones.add(0, revision);
+        return revision;
     }
 
     public void renombrar(String nuevoNombre, Instant ahora) {
@@ -91,26 +108,16 @@ public class Archivo {
         this.fechaModificacion = ahora;
     }
 
-    public RevisionArchivo agregarRevision(String storageKey, String checksum, long tamanio,
-                                           String contentType, Instant ahora) {
-        if (TipoArchivo.desdeContentType(contentType) != this.tipo) {
-            throw new ArchivoInvalidoException("La revisión debe ser del mismo tipo que el archivo");
-        }
-        revisionActual++;
-        RevisionArchivo revision = new RevisionArchivo(this, revisionActual, storageKey,
-                checksum, tamanio, contentType, ahora);
-        revisiones.add(0, revision);
-        this.fechaModificacion = ahora;
-        return revision;
-    }
 
-    // Una revisión tiene que ser del mismo tipo que el archivo.
     public void verificarTipoCompatible(String contentType) {
-        if (TipoArchivo.desdeContentType(contentType) != this.tipo) {
-            throw new ArchivoInvalidoException("La revisión debe ser del mismo tipo que el archivo");
+        TipoArchivo.desdeContentType(contentType); // 415 si el formato no está permitido
+        if (!contentType.equals(this.contentType)) {
+            throw new ArchivoInvalidoException(
+                    "La revisión debe ser " + this.contentType + ", igual que el archivo");
         }
     }
 
+    // Las más recientes primero: la lista ya viene ordenada por número descendente (@OrderBy).
     public List<RevisionArchivo> ultimasRevisiones(int cantidad) {
         return revisiones.stream().limit(cantidad).toList();
     }
