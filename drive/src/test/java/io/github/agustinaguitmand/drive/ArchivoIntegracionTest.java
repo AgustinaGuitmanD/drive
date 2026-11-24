@@ -16,9 +16,13 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -31,13 +35,13 @@ class ArchivoIntegracionTest {
     @Autowired
     MockMvc mvc;
 
-    // Los archivos de esta clase se guardan en una carpeta temporal que se borra al terminar.
     @TempDir
-    static Path carpetaTemporal;
+    static Path carpeta;
+
 
     @DynamicPropertySource
     static void storageTemporal(DynamicPropertyRegistry registro) {
-        registro.add("drive.storage.dir", () -> carpetaTemporal.toString());
+        registro.add("drive.storage.dir", () -> carpeta.toString());
     }
 
     @Test
@@ -59,7 +63,6 @@ class ArchivoIntegracionTest {
         long version = versionDe(usuario, id);
 
         renombrar(usuario, id, "vacaciones.png", version).andExpect(status().isOk());
-        // Se renombra otra vez con la versión que ya quedó vieja.
         renombrar(usuario, id, "playa.png", version).andExpect(status().isConflict());
     }
 
@@ -93,6 +96,71 @@ class ArchivoIntegracionTest {
 
         mvc.perform(get("/api/archivos/{id}", id).header("X-User-Id", usuario))
                 .andExpect(jsonPath("$.nombre").value("foto (1).png"));
+    }
+
+    @Test
+    void unaRevisionNuevaReemplazaElContenidoYLaAnteriorSigueDisponible() throws Exception {
+        String usuario = registrarUsuario();
+        byte[] fotoOriginal = {1, 2, 3};
+        byte[] fotoNueva = {4, 5, 6, 7};
+        String id = subir(usuario, "foto.png", "image/png", fotoOriginal);
+
+        subirRevision(usuario, id, fotoNueva, versionDe(usuario, id))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.revisionActual").value(2));
+
+        mvc.perform(get("/api/archivos/{id}/contenido", id).header("X-User-Id", usuario))
+                .andExpect(content().bytes(fotoNueva));
+        mvc.perform(get("/api/archivos/{id}/revisiones/1/contenido", id).header("X-User-Id", usuario))
+                .andExpect(content().bytes(fotoOriginal));
+    }
+
+    @Test
+    void elHistorialListaLasRevisionesDeLaMasNuevaALaMasVieja() throws Exception {
+        String usuario = registrarUsuario();
+        String id = subir(usuario, "foto.png", "image/png", new byte[]{1, 2, 3});
+        subirRevision(usuario, id, new byte[]{4, 5, 6, 7}, versionDe(usuario, id))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/archivos/{id}/revisiones", id).header("X-User-Id", usuario))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].numero").value(2))
+                .andExpect(jsonPath("$[0].tamanio").value(4))
+                .andExpect(jsonPath("$[1].numero").value(1))
+                .andExpect(jsonPath("$[1].tamanio").value(3));
+    }
+
+    @Test
+    void siDosPersonasSubenUnaRevisionConLaMismaVersionLaPrimeraGana() throws Exception {
+        // Las dos leyeron el archivo en la misma versión.
+        String usuario = registrarUsuario();
+        String id = subir(usuario, "foto.png", "image/png", new byte[]{1, 2, 3});
+        long versionQueLeyeronAmbas = versionDe(usuario, id);
+
+        // La primera sube su revisión: se acepta y la versión avanza.
+        subirRevision(usuario, id, new byte[]{4, 5, 6}, versionQueLeyeronAmbas)
+                .andExpect(status().isCreated());
+
+        // La segunda sube con la versión que había leído, que ya quedó vieja: conflicto.
+        subirRevision(usuario, id, new byte[]{7, 8, 9}, versionQueLeyeronAmbas)
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void borrarUnArchivoEliminaDelDiscoLosBytesDeTodasSusRevisiones() throws Exception {
+        // Cuántos archivos hay en disco antes:
+        long archivosEnDiscoAntes = cantidadDeArchivosEnDisco();
+
+        // Un archivo nuevo y una revisión: dos archivos nuevos en disco.
+        String usuario = registrarUsuario();
+        String id = subir(usuario, "foto.png", "image/png", new byte[]{1, 2, 3});
+        subirRevision(usuario, id, new byte[]{4, 5, 6, 7}, versionDe(usuario, id))
+                .andExpect(status().isCreated());
+
+        mvc.perform(delete("/api/archivos/{id}", id).header("X-User-Id", usuario))
+                .andExpect(status().isNoContent());
+
+        assertEquals(archivosEnDiscoAntes, cantidadDeArchivosEnDisco());
     }
 
     // --- Métodos auxiliares ---
@@ -132,5 +200,18 @@ class ArchivoIntegracionTest {
         String respuesta = mvc.perform(get("/api/archivos/{id}", id).header("X-User-Id", usuario))
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(respuesta, "$.version")).longValue();
+    }
+
+    private ResultActions subirRevision(String usuario, String archivoId, byte[] contenido,
+                                        long version) throws Exception {
+        return mvc.perform(multipart("/api/archivos/{id}/revisiones", archivoId)
+                .file(new MockMultipartFile("archivo", "foto.png", "image/png", contenido))
+                .param("version", String.valueOf(version))
+                .header("X-User-Id", usuario));
+    }
+    private static long cantidadDeArchivosEnDisco() throws IOException {
+        try (Stream<Path> archivos = Files.list(carpeta)) {
+            return archivos.count();
+        }
     }
 }
