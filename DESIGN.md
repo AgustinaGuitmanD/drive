@@ -1,6 +1,6 @@
 # **Google Drive: diseño**
 
-Prototipo del capítulo 15 de *System Design Interview* (Alex Xu). Este documento explica qué construí, por qué de esta forma, qué dejé afuera y cómo usé la IA. Cómo correrlo, los endpoints y las reglas de la API están en el [README](https://claude.ai/README.md).
+Prototipo del capítulo 15 de *System Design Interview* (Alex Xu). Este documento explica qué construí, por qué de esta forma, qué dejé afuera y cómo usé la IA. Cómo correrlo, los endpoints y las reglas de la API están en el README
 
 ## **1\. Alcance respecto del libro**
 
