@@ -1,34 +1,35 @@
 # **Google Drive: diseño**
 
-Prototipo del capítulo 15 de *System Design Interview* (Alex Xu). Este documento explica qué construí, por qué de esta forma, qué dejé afuera y cómo usé la IA. Cómo correrlo, los endpoints y las reglas de la API están en el README
+Prototipo del capítulo 15 de *System Design Interview* (Alex Xu). Este documento explica qué construí, por qué de esta forma, qué dejé afuera y cómo usé la IA. Cómo correrlo, los endpoints y las reglas de la API están en el README.
 
 ## **1\. Alcance respecto del libro**
 
 **Implementado.** Las tres operaciones de la API del capítulo (subir, descargar y listar las revisiones de un archivo), más listar, renombrar y borrar. También la estrategia del libro para los conflictos: cuando dos cambios chocan, gana el primero que se procesa.
 
-**Cómo se relaciona mi esquema con el del libro:Fuera de alcance, a propósito:**
+**Cómo se relaciona mi esquema con el del libro:**
 
 * ***user → Persona:***   
   * Mientras que el diseño original plantea una cuenta completa integrada a un sistema de login, en mi implementación **opté por simplificar** la entidad para que almacene únicamente nombre, apellido y correo único, sin contraseñas ni manejo de sesiones. Para simular el contexto de ejecución, la API identifica quién opera enviando su ID en el header `X-User-Id`.   
-  * **Por qué:** Prioricé resolver el dominio central de Drive sin sumar la sobrecarga de implementar autenticación real. Es el principal *trade-off* del   
+  * **Por qué:** Prioricé resolver el dominio central de Drive sin sumar la sobrecarga de implementar autenticación real. Es el principal trade-off del prototipo y sus consideraciones están cubiertas en Seguridad.  
 * ***file → Archivo:***  
   * En este caso decidí mantener la estrategia del diseño original: Archivo representa el recurso tal como lo ve el usuario (dueño, nombre, tipo y fechas) y, además, desnormaliza los metadatos de la revisión vigente (ubicación de los bytes, checksum, tamaño y formato) para no tener que consultar el historial.  
-  * Por qué: Listar archivos y descargar la versión actual son las operaciones más frecuentes del sistema, y esta estructura evita hacer joins o buscar siempre la última revisión. El trade-off es la duplicación de datos entre Archivo y su revisión activa; para garantizar la consistencia, restringí su actualización únicamente a través de agregarRevision, evitando puntos de modificación dispersos que puedan desincronizar el estado.  
+  * **Por qué:** Listar archivos y descargar la versión actual son las operaciones más frecuentes del sistema, y esta estructura evita hacer joins o buscar siempre la última revisión. El trade-off es la duplicación de datos entre Archivo y su revisión activa; para garantizar la consistencia, restringí su actualización únicamente a través de agregarRevision, evitando puntos de modificación dispersos que puedan desincronizar el estado.  
 * ***file\_version → RevisionArchivo:***  
   * Al igual que en el modelo del libro, diseñé el historial como una estructura de solo escritura (append-only): cada RevisionArchivo registra su número, referencia a los bytes, checksum y fecha, y nunca se edita; subir contenido nuevo siempre inserta una fila nueva.  
-  * Por qué: La inmutabilidad es lo que vuelve confiable al historial: si una revisión pudiera alterarse, dejaría de garantizarse que "la revisión 2" sea exactamente lo que se subió en ese momento.
+  * **Por qué:** La inmutabilidad es lo que vuelve confiable al historial: si una revisión pudiera alterarse, dejaría de garantizarse que "la revisión 2" sea exactamente lo que se subió en ese momento.
 
 * ***block → un storageKey por revisión:***  
   * Mientras que el modelo de referencia fragmenta cada archivo en múltiples bloques para transferir únicamente las partes modificadas, en mi implementación **opté por almacenar** cada revisión como un único archivo íntegro en disco, referenciado mediante un storageKey.  
-  * **Por qué:** mplementar *chunking*, control de integridad por fragmento y reensamblado era un desarrollo muy largo al que no llegaba con los tiempos del proyecto.  Para acotar el alcance de forma segura sin esa complejidad, **fijé un límite máximo de 20 MB por archivo**; además, como la API recibe el archivo completo en cada *request* (sin un cliente que calcule *diffs*), partirlo en bloques tampoco habría generado un ahorro real.   
+  * **Por qué:** Implementar *chunking*, control de integridad por fragmento y reensamblado era un desarrollo muy largo al que no llegaba con los tiempos del proyecto.  Para acotar el alcance de forma segura sin esa complejidad, **fijé un límite máximo de 20 MB por archivo**; además, como la API recibe el archivo completo en cada *request* (sin un cliente que calcule *diffs*), partirlo en bloques tampoco habría generado un ahorro real.   
 * ***device y namespace → fuera de alcance:***  
   * En el diseño original, device registra los distintos dispositivos de un usuario para notificar cambios y mantenerlos sincronizados, mientras que namespace modela su espacio raíz para organizar jerarquías de carpetas. En mi prototipo **decidí dejar ambas entidades fuera de alcance**.  
   * **Por qué:** Al no haber clientes suscriptos a eventos de sincronización en tiempo real, llevar un registro de dispositivos no tiene ningún consumidor dentro del sistema. Por otro lado, **no llegué a implementar la jerarquía de carpetas** en esta entrega y acoté el modelo a una lista plana de archivos (una funcionalidad que definitivamente incluiría en una próxima iteración); sin carpetas que organizar, abstraer un namespace resultaba innecesario, ya que la pertenencia de cada recurso queda resuelta de forma directa mediante duenioId. 
 
+**Fuera de alcance, a propósito:**
 
 | Del libro o de un Drive real | Por qué quedó afuera | Cómo lo haría |
 | ----- | ----- | ----- |
-| Bloques y sincronización por diferencias | Solo valen con un cliente que sincroniza; acá el cliente es Postman | Partir el archivo en bloques con su hash y subir solo los que cambiaron |
+| Bloques y sincronización por diferencias | Solo valen con un cliente que sincroniza; acá el cliente es man | Partir el archivo en bloques con su hash y subir solo los que cambiaron |
 | Deduplicación | Complejiza el borrado físico de archivos, ya que exige verificar que ningún otro recurso siga apuntando a los mismos bytes  | Aprovechar el *checksum* que ya calcula la API para no duplicar archivos idénticos en disco, gestionando la eliminación mediante conteo de referencias (*reference counting*).  |
 | Notificaciones (long polling) | Sin clientes que sincronizan, no hay a quién avisar | Agregar un servicio de notificaciones desacoplado que avise a los dispositivos activos del usuario ante cada modificación.  |
 | Subida reanudable | Con el tope de 20 MB por archivo, las transferencias son cortas y no justifican mantener estados de subida intermedios. | Implementar envíos por partes asociados a un ID de sesión para retomar transferencias interrumpidas sin reiniciar desde cero.  |
@@ -83,16 +84,16 @@ Como la base de datos y el sistema de archivos no comparten una transacción at�
 | ----- | ----- | ----- |
 | Subir archivo  | 1\. Escribir bytes en disco 2\. Guardar metadata en la base | Se borran los bytes recién escritos |
 | Subir revisión | Igual que subir | Se eliminan los bytes nuevos y la revisión vigente no se altera.  |
-| Borrar | 1\. Eliminar metadata en la base 2\. Borrar los bytes de todas sus revisiones  | Si falla el disco, quedan bytes huérfanos que se registran en los logs para limpieza posterior. |
+| Borrar | 1\. Eliminar metadata en la base 2\. Borrar los bytes de todas sus revisiones  | Si falla el disco, quedan bytes huérfanos que se registran en los logs para limpieza erior. |
 | Copia cortada | — | LocalBlobStorage borra el archivo parcial |
 
 **Por qué elegí este orden:** En el peor escenario posible, un fallo deja **bytes huérfanos en disco**; esto es invisible para el usuario, no afecta la integridad funcional y puede limpiarse de forma diferida a partir de los logs. Invertir el orden implicaría el riesgo opuesto: dejar metadata apuntando a archivos inexistentes en disco, lo que rompería el listado y provocaría errores al intentar descargar. 
 
 **Por qué `subir` no tiene `@Transactional` y `subirRevision` sí:**
 
-* ***subir** (sin @Transactional): Al crear una entidad nueva, llamar a save() sin una transacción envolvente hace que el commit ocurra de forma inmediata dentro del bloque try. Si surge un error en la base, la excepción se captura en ese mismo instante y el catch ejecuta la compensación borrando los bytes recién escritos en disco. Si hubiera usado @Transactional, el flush y el commit se postergarían hasta el cierre del método (fuera del try), impidiendo capturar fallos de confirmación para limpiar el disco.*  
-* ***subirRevision** (con @Transactional \+ saveAndFlush): A diferencia de una alta nueva, esta operación modifica un Archivo existente y accede a su colección de revisiones cargada de forma diferida (lazy loading), por lo que requiere mantener abierta la sesión de persistencia durante todo el método. Como @Transactional retrasa la confirmación hasta el final, forcé la sincronización mediante saveAndFlush() dentro del try: de esta manera, cualquier violación de unicidad por subidas concurrentes dispara la excepción en ese punto y permite eliminar los bytes nuevos antes de salir del método.*  
-* ***borrar** (sin @Transactional): Al omitir la anotación, la eliminación de la metadata se confirma en la base de datos antes de avanzar hacia el borrado físico.* Esto asegura que el registro deje de existir para los usuarios antes de tocar los archivos en disco.
+* **subir** (sin @Transactional): Al crear una entidad nueva, llamar a save() sin una transacción envolvente hace que el commit ocurra de forma inmediata dentro del bloque try. Si surge un error en la base, la excepción se captura en ese mismo instante y el catch ejecuta la compensación borrando los bytes recién escritos en disco. Si hubiera usado @Transactional, el flush y el commit se ergarían hasta el cierre del método (fuera del try), impidiendo capturar fallos de confirmación para limpiar el disco.  
+* **subirRevision** (con @Transactional \+ saveAndFlush): A diferencia de una alta nueva, esta operación modifica un Archivo existente y accede a su colección de revisiones cargada de forma diferida (lazy loading), por lo que requiere mantener abierta la sesión de persistencia durante todo el método. Como @Transactional retrasa la confirmación hasta el final, forcé la sincronización mediante saveAndFlush() dentro del try: de esta manera, cualquier violación de unicidad por subidas concurrentes dispara la excepción en ese punto y permite eliminar los bytes nuevos antes de salir del método.  
+* **borrar** (sin @Transactional): Al omitir la anotación, la eliminación de la metadata se confirma en la base de datos antes de avanzar hacia el borrado físico. Esto asegura que el registro deje de existir para los usuarios antes de tocar los archivos en disco.
 
 
 ## **6\. Checksum**
@@ -102,7 +103,7 @@ Calculo el SHA-256 mientras se copian los bytes del request al disco (usando Dig
 ## **7\. Decisiones de la API**
 
 * **Las revisiones son un subrecurso del archivo** (/api/archivos/{id}/revisiones), porque no existen sin él.  
-* POST /revisiones y no PUT /contenido: subir contenido nuevo crea una revisión, no reemplaza la anterior. El Location de la respuesta apunta al contenido de la revisión creada.  
+* **POST /revisiones y no PUT /contenido:** subir contenido nuevo crea una revisión, no reemplaza la anterior. El Location de la respuesta apunta al contenido de la revisión creada.  
 * **Metadata y contenido separados:** GET /{id} devuelve JSON y GET /{id}/contenido, los bytes.  
 * **El historial devuelve 20 revisiones por defecto,** permitiendo solicitar entre **1 y 100**.  
 * **El storageKey nunca se expone:** es un detalle interno del almacenamiento.
@@ -136,10 +137,10 @@ Calculo el SHA-256 mientras se copian los bytes del request al disco (usando Dig
 
 **Simplificaciones conscientes:**
 
-* **Paginación en memoria al listar revisiones:** Aunque el endpoint limita la respuesta (entre 1 y 100 elementos), actualmente consulta todo el historial y recorta la página en memoria. Para un prototipo con pocos cambios por archivo es suficiente, pero para escalar trasladaría el paginado directamente a la consulta SQL   
+* **Paginación en memoria al listar revisiones:** Aunque el endpoint limita la respuesta (entre 1 y 100 elementos), actualmente consulta todo el historial y recorta la página en memoria. Para un prototipo con pocos cambios por archivo es suficiente, pero para escalar trasladaría el paginado directamente a la consulta SQL.   
 * **Listado de archivos sin paginar:** De forma similar, listarArchivos devuelve todos los recursos del usuario en una única respuesta para simplificar el consumo inicial. A medida que crezca el volumen de archivos por cuenta, incorporaría paginación en el endpoint.   
-* **Retención ilimitada de revisiones:** No establecí un tope máximo de versiones por archivo. Implementar una política de retención (por ejemplo, conservar solo las últimas $N$) requiere coordinar el borrado con cuidado: al igual que al eliminar un archivo, primero habría que confirmar la baja en la base de datos y recién después borrar los bytes de las revisiones descartadas en disco para no dejar referencias rotas.   
-* Un SELECT extra antes de cada INSERT: Como asigno el id en el constructor de la entidad y el campo @Version es un tipo primitivo (long), Spring Data JPA no puede inferir si la entidad es nueva y ejecuta merge() en lugar de persist(), disparando una consulta previa innecesaria.   
+* **Retención ilimitada de revisiones:** No establecí un tope máximo de versiones por archivo. Implementar una política de retención (por ejemplo, conservar solo las últimas N) requiere coordinar el borrado con cuidado: al igual que al eliminar un archivo, primero habría que confirmar la baja en la base de datos y recién después borrar los bytes de las revisiones descartadas en disco para no dejar referencias rotas.   
+* **Un SELECT extra antes de cada INSERT:** Como asigno el id en el constructor de la entidad y el campo @Version es un tipo primitivo (long), Spring Data JPA no puede inferir si la entidad es nueva y ejecuta merge() en lugar de persist(), disparando una consulta previa innecesaria.   
 * **El storage local funciona en una sola instancia;** con varias, haría falta S3 o un almacenamiento compartido.
 
 #### **Próximos pasos (con más tiempo de desarrollo)**
