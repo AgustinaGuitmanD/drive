@@ -73,7 +73,6 @@ alguien lo modificó en el medio, la respuesta es **409**.
 
 ## Reglas de la API
 
-Comportamientos a propósito que, sin saberlos, pueden parecer errores:
 
 - **Formatos permitidos:** PNG, JPEG, GIF, WebP, PDF y texto plano. Cualquier otro (incluidos
   HTML y SVG) da **415**.
