@@ -86,7 +86,7 @@ public class Archivo {
         agregarRevision(storageKey, checksum, tamanio, contentType, ahora);
     }
 
-    public RevisionArchivo agregarRevision(String storageKey, String checksum, long tamanio,
+    public void agregarRevision(String storageKey, String checksum, long tamanio,
                                            String contentType, Instant ahora) {
         if (tamanio <= 0) {
             throw new ArchivoInvalidoException("El archivo está vacío");
@@ -101,7 +101,6 @@ public class Archivo {
         RevisionArchivo revision = new RevisionArchivo(this, revisionActual, storageKey,
                 checksum, tamanio, contentType, ahora);
         revisiones.add(0, revision);
-        return revision;
     }
 
     public void renombrar(String nuevoNombre, Instant ahora) {
