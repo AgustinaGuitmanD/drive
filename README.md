@@ -35,52 +35,41 @@ Las tablas se crean al arrancar. Los archivos subidos se guardan en `drive/stora
 
 En Windows, usá `.\mvnw` en lugar de `./mvnw`.
 
+Desde ahí:
+
+```bash
+docker compose up -d        # levanta MySQL en el puerto 3307
+./mvnw spring-boot:run      # API en http://localhost:8080
+```
+
+Las tablas se crean al arrancar. Los archivos subidos se guardan en `drive/storage/`.
+
+En Windows, usá `.\mvnw` en lugar de `./mvnw`.
+
 ## Tests
-Desde la misma carpeta (drive/drive/)
+
+Desde la misma carpeta (`drive/drive/`):
+
 ```bash
 ./mvnw clean test
 ```
 
 - **Los unitarios** (dominio, servicio, storage y controller) no necesitan nada más.
 - **Los de integración** levantan un MySQL propio con Testcontainers, así que necesitan Docker
-  abierto. No usan la base del `docker-compose`. Si Docker no está disponible, se saltean y el
+  abierto. No hace falta levantar el `docker-compose`: no usan esa base. Si Docker no está disponible, se saltean y el
   resto corre igual. La primera vez tardan más, porque descargan la imagen de MySQL.
 
 ## Probarlo
 
+Importá la colección `drive/postman/drive.postman_collection.json` en Postman (**Import**) y
+ejecutá los pedidos en orden. Cada uno guarda en variables de la colección los ids que usan
+los siguientes (`usuarioId`, `archivoId` y `version`), así que no hace falta copiar nada a mano.
+En los pedidos que suben archivos, elegí el archivo en **Body → form-data → archivo**.
+
 Cada pedido a `/api/archivos` lleva el header `X-User-Id` con el id de una persona registrada.
-Es una simplificación del prototipo en lugar de autenticación real (ver el DESIGN.md).
-
-**1. Registrar una persona** y copiar el `id` de la respuesta:
-
-```bash
-curl -X POST http://localhost:8080/api/personas \
-  -H "Content-Type: application/json" \
-  -d '{"nombre": "Ana", "apellido": "Pérez", "correo": "ana@mail.com"}'
-```
-
-**2. Subir un archivo** (PNG, JPEG, GIF, WebP, PDF o texto plano; hasta 20 MB):
-
-```bash
-curl -X POST http://localhost:8080/api/archivos \
-  -H "X-User-Id: <id-de-la-persona>" \
-  -F "archivo=@foto.png"
-```
-
-**3. Listar, descargar y renombrar:**
-
-```bash
-curl http://localhost:8080/api/archivos -H "X-User-Id: <id>"
-curl http://localhost:8080/api/archivos/<archivo-id>/contenido -H "X-User-Id: <id>" -o descarga.png
-
-curl -X PATCH http://localhost:8080/api/archivos/<archivo-id> \
-  -H "X-User-Id: <id>" -H "Content-Type: application/json" \
-  -d '{"nombre": "vacaciones.png", "version": 0}'
-```
-
-Para renombrar o subir una revisión, `version` tiene que ser la que devolvió la última
-respuesta del archivo. Si no coincide, alguien lo modificó en el medio y la respuesta es
-**409**.
+Es una simplificación del prototipo en lugar de autenticación real (ver el DESIGN.md). Para
+renombrar o subir una revisión, `version` tiene que coincidir con la actual del archivo; si
+alguien lo modificó en el medio, la respuesta es **409**.
 
 ## Endpoints
 
@@ -107,6 +96,7 @@ drive/
 ├── DESIGN.md
 ├── docker-compose.yml
 ├── pom.xml
+├── postman/            colección de Postman con todos los pedidos
 └── src/main/java/io/github/agustinaguitmand/drive/
     ├── controller/     endpoints, DTO y manejo de errores
     ├── services/       lógica de negocio
