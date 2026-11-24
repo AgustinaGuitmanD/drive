@@ -2,7 +2,7 @@ package io.github.agustinaguitmand.drive.models.entities;
 
 import io.github.agustinaguitmand.drive.exceptions.TipoNoPermitidoException;
 
-import java.util.Arrays;
+
 import java.util.Set;
 
 /**
@@ -21,15 +21,14 @@ public enum TipoArchivo {
     }
 
     public static TipoArchivo desdeContentType(String contentType) {
-        // Set.of no admite contains(null): se descarta antes de buscar.
         if (contentType == null) {
             throw new TipoNoPermitidoException(contentType);
         }
-        for (TipoArchivo tipo : values()) {                          // recorre IMAGEN y DOCUMENTO
-            if (tipo.contentTypesPermitidos.contains(contentType)) { // ¿está en su lista?
-                return tipo;                                         // sí: es de este tipo
+        for (TipoArchivo tipo : values()) {
+            if (tipo.contentTypesPermitidos.contains(contentType)) {
+                return tipo;
             }
         }
-        throw new TipoNoPermitidoException(contentType);             // no estaba en ninguna lista
+        throw new TipoNoPermitidoException(contentType);
     }
 }
