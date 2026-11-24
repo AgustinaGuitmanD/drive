@@ -11,23 +11,17 @@
 	<groupId>io.github.agustinaguitmand</groupId>
 	<artifactId>drive</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>drive</name>
+	<description>Prototipo de Google Drive (System Design Interview, cap. 15)</description>
 	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
-	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
-	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<!--
+		  Fuerzo Tomcat 11.0.29 (Boot 4.2.0 trae 11.0.27) por CVE en tomcat-embed-core
+		  y tomcat-embed-websocket marcados por el escáner del IDE (Mend), entre ellos
+		  CVE-2026-116561 y CVE-2026-118028 (9.1). Sacarlo cuando una versión de
+		  Spring Boot incluya Tomcat 11.0.29 o posterior.
+		-->
 		<tomcat.version>11.0.29</tomcat.version>
 	</properties>
 	<dependencies>
