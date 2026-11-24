@@ -18,10 +18,15 @@ No hace falta instalar Maven: el proyecto trae el wrapper (`mvnw`).
 
 ## Cómo correrlo
 
-Todos los comandos se ejecutan desde la carpeta `drive/`:
+Todos los comandos se ejecutan desde la subcarpeta drive/ del repositorio, donde están el pom.xml y el docker-compose.yml. 
+Como el repo también se llama drive, al clonarlo queda drive/drive/
 
 ```bash
-cd drive
+git clone https://github.com/AgustinaGuitmanD/drive.git
+cd drive/drive
+```
+
+```bash
 docker compose up -d        # levanta MySQL en el puerto 3307
 ./mvnw spring-boot:run      # API en http://localhost:8080
 ```
@@ -31,9 +36,8 @@ Las tablas se crean al arrancar. Los archivos subidos se guardan en `drive/stora
 En Windows, usá `.\mvnw` en lugar de `./mvnw`.
 
 ## Tests
-
+Desde la misma carpeta (drive/drive/)
 ```bash
-cd drive
 ./mvnw clean test
 ```
 
