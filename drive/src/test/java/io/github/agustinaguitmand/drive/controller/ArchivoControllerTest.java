@@ -1,36 +1,28 @@
 package io.github.agustinaguitmand.drive.controller;
 
-import io.github.agustinaguitmand.drive.exceptions.ArchivoNoEncontradoException;
-import io.github.agustinaguitmand.drive.exceptions.NombreDuplicadoException;
-import io.github.agustinaguitmand.drive.exceptions.TipoNoPermitidoException;
+import io.github.agustinaguitmand.drive.exceptions.*;
+import io.github.agustinaguitmand.drive.models.ContenidoArchivo;
+import io.github.agustinaguitmand.drive.models.entities.Archivo;
+import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
 import io.github.agustinaguitmand.drive.services.IArchivoService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import io.github.agustinaguitmand.drive.exceptions.ConflictoDeVersionException;
-import io.github.agustinaguitmand.drive.exceptions.RevisionNoEncontradaException;
-import io.github.agustinaguitmand.drive.models.ContenidoArchivo;
-import io.github.agustinaguitmand.drive.models.entities.Archivo;
-import io.github.agustinaguitmand.drive.models.entities.TipoArchivo;
-import org.springframework.core.io.ByteArrayResource;
-import java.time.Instant;
-
-import static org.mockito.Mockito.verify;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 @WebMvcTest(ArchivoController.class)
 class ArchivoControllerTest {
 

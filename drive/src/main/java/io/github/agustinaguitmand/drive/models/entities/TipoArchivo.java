@@ -2,7 +2,6 @@ package io.github.agustinaguitmand.drive.models.entities;
 
 import io.github.agustinaguitmand.drive.exceptions.TipoNoPermitidoException;
 
-
 import java.util.Set;
 
 /**
