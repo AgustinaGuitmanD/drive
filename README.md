@@ -7,7 +7,7 @@ revisiones del contenido.
 Hecho con Java 17, Spring Boot 4.2, JPA/Hibernate y MySQL 8.4.
 
 Las decisiones de diseño, los trade-offs, la seguridad y el uso de IA están en
-**[drive/DESIGN.md](drive/DESIGN.md)**.
+**[DESIGN.md](DESIGN.md)**.
 
 ## Requisitos
 
@@ -35,17 +35,6 @@ Las tablas se crean al arrancar. Los archivos subidos se guardan en `drive/stora
 
 En Windows, usá `.\mvnw` en lugar de `./mvnw`.
 
-Desde ahí:
-
-```bash
-docker compose up -d        # levanta MySQL en el puerto 3307
-./mvnw spring-boot:run      # API en http://localhost:8080
-```
-
-Las tablas se crean al arrancar. Los archivos subidos se guardan en `drive/storage/`.
-
-En Windows, usá `.\mvnw` en lugar de `./mvnw`.
-
 ## Tests
 
 Desde la misma carpeta (`drive/drive/`):
@@ -61,7 +50,7 @@ Desde la misma carpeta (`drive/drive/`):
 
 ## Probarlo
 
-Importá la colección `drive/postman/drive.postman_collection.json` en Postman (**Import**) y
+Importá la colección `postman/drive.postman_collection.json` en Postman (**Import**) y
 ejecutá los pedidos en orden. Cada uno guarda en variables de la colección los ids que usan
 los siguientes (`usuarioId`, `archivoId` y `version`), así que no hace falta copiar nada a mano.
 En los pedidos que suben archivos, elegí el archivo en **Body → form-data → archivo**.
@@ -114,16 +103,18 @@ Los errores se devuelven en formato `ProblemDetail` (RFC 7807).
 ## Estructura
 
 ```
-drive/
+drive/                      raíz del repositorio
+├── README.md
 ├── DESIGN.md
-├── docker-compose.yml
-├── pom.xml
-├── postman/            colección de Postman con todos los pedidos
-└── src/main/java/io/github/agustinaguitmand/drive/
-    ├── controller/     endpoints, DTO y manejo de errores
-    ├── services/       lógica de negocio
-    ├── models/         entidades (Archivo, RevisionArchivo, Persona) y helpers
-    ├── repositories/   acceso a MySQL (Spring Data JPA)
-    ├── storage/        guardado de los bytes (en disco; reemplazable por S3)
-    └── exceptions/     excepciones propias
+├── postman/                colección de Postman con todos los pedidos
+└── drive/                  proyecto Spring Boot
+    ├── docker-compose.yml
+    ├── pom.xml
+    └── src/main/java/io/github/agustinaguitmand/drive/
+        ├── controller/     endpoints, DTO y manejo de errores
+        ├── services/       lógica de negocio
+        ├── models/         entidades (Archivo, RevisionArchivo, Persona) y helpers
+        ├── repositories/   acceso a MySQL (Spring Data JPA)
+        ├── storage/        guardado de los bytes (en disco; reemplazable por S3)
+        └── exceptions/     excepciones propias
 ```
