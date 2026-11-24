@@ -8,7 +8,7 @@ Prototipo del capítulo 15 de *System Design Interview* (Alex Xu). Este document
 
 **Cómo se relaciona mi esquema con el del libro:Fuera de alcance, a propósito:**
 
-* ***`user` → `Persona`:***   
+* ***user → Persona:***   
   * Mientras que el diseño original plantea una cuenta completa integrada a un sistema de login, en mi implementación **opté por simplificar** la entidad para que almacene únicamente nombre, apellido y correo único, sin contraseñas ni manejo de sesiones. Para simular el contexto de ejecución, la API identifica quién opera enviando su ID en el header `X-User-Id`.   
   * **Por qué:** Prioricé resolver el dominio central de Drive sin sumar la sobrecarga de implementar autenticación real. Es el principal *trade-off* del   
 * ***file → Archivo:***  
