@@ -1,0 +1,400 @@
+{
+  "info": {
+    "name": "Drive",
+    "description": "Pedidos de ejemplo para la API. Ejecutalos en orden: cada uno guarda en variables de la colección los ids que usan los siguientes.\n\nLevantá la app antes (ver README).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Registrar persona",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/personas",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "personas"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Ana\",\n  \"apellido\": \"Perez\",\n  \"correo\": \"{{$randomEmail}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Crea una persona con un correo al azar, así se puede repetir. Guarda su id en la variable usuarioId."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Guarda el id de la persona: los demás pedidos lo mandan en X-User-Id.",
+              "if (pm.response.code === 201) {",
+              "    pm.collectionVariables.set('usuarioId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Subir archivo",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos"
+          ]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "archivo",
+              "type": "file",
+              "src": [],
+              "description": "Elegí una imagen (PNG, JPEG, GIF, WebP) o un PDF/texto"
+            }
+          ]
+        },
+        "description": "Antes de enviar, elegí un archivo en Body → form-data → archivo. Subir dos veces el mismo nombre guarda el segundo como \"nombre (1).ext\"."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Guarda el id y la versión del archivo para los pedidos siguientes.",
+              "if (pm.response.code === 200 || pm.response.code === 201) {",
+              "    const archivo = pm.response.json();",
+              "    pm.collectionVariables.set('archivoId', archivo.id);",
+              "    pm.collectionVariables.set('version', archivo.version);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Listar mis archivos",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos"
+          ]
+        }
+      }
+    },
+    {
+      "name": "4. Ver metadata",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos/{{archivoId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos",
+            "{{archivoId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Guarda el id y la versión del archivo para los pedidos siguientes.",
+              "if (pm.response.code === 200 || pm.response.code === 201) {",
+              "    const archivo = pm.response.json();",
+              "    pm.collectionVariables.set('archivoId', archivo.id);",
+              "    pm.collectionVariables.set('version', archivo.version);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Descargar contenido",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos/{{archivoId}}/contenido",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos",
+            "{{archivoId}}",
+            "contenido"
+          ]
+        },
+        "description": "Postman muestra la imagen o el PDF en la respuesta."
+      }
+    },
+    {
+      "name": "6. Renombrar",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos/{{archivoId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos",
+            "{{archivoId}}"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"vacaciones.png\",\n  \"version\": {{version}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Usa la última versión guardada. Si la enviás dos veces sin volver a leer el archivo, la segunda da 409 (versión desactualizada)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Guarda el id y la versión del archivo para los pedidos siguientes.",
+              "if (pm.response.code === 200 || pm.response.code === 201) {",
+              "    const archivo = pm.response.json();",
+              "    pm.collectionVariables.set('archivoId', archivo.id);",
+              "    pm.collectionVariables.set('version', archivo.version);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Subir revisión",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos/{{archivoId}}/revisiones",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos",
+            "{{archivoId}}",
+            "revisiones"
+          ]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "archivo",
+              "type": "file",
+              "src": [],
+              "description": "Mismo formato que el archivo original"
+            },
+            {
+              "key": "version",
+              "type": "text",
+              "value": "{{version}}"
+            }
+          ]
+        },
+        "description": "Contenido nuevo para el mismo archivo. Tiene que ser del mismo formato (un PNG solo acepta otro PNG)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Guarda el id y la versión del archivo para los pedidos siguientes.",
+              "if (pm.response.code === 200 || pm.response.code === 201) {",
+              "    const archivo = pm.response.json();",
+              "    pm.collectionVariables.set('archivoId', archivo.id);",
+              "    pm.collectionVariables.set('version', archivo.version);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Historial de revisiones",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos/{{archivoId}}/revisiones?limite=20",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos",
+            "{{archivoId}}",
+            "revisiones"
+          ],
+          "query": [
+            {
+              "key": "limite",
+              "value": "20"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "9. Descargar revisión 1",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos/{{archivoId}}/revisiones/1/contenido",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos",
+            "{{archivoId}}",
+            "revisiones",
+            "1",
+            "contenido"
+          ]
+        },
+        "description": "El contenido original, aunque después se hayan subido revisiones."
+      }
+    },
+    {
+      "name": "10. Borrar archivo",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "{{usuarioId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/archivos/{{archivoId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "archivos",
+            "{{archivoId}}"
+          ]
+        },
+        "description": "Borra el archivo y todas sus revisiones. Después, pedir su metadata da 404."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "usuarioId",
+      "value": ""
+    },
+    {
+      "key": "archivoId",
+      "value": ""
+    },
+    {
+      "key": "version",
+      "value": "0"
+    }
+  ]
+}
