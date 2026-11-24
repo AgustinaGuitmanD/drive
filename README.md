@@ -71,6 +71,31 @@ Es una simplificación del prototipo en lugar de autenticación real (ver el DES
 renombrar o subir una revisión, `version` tiene que coincidir con la actual del archivo; si
 alguien lo modificó en el medio, la respuesta es **409**.
 
+## Reglas de la API
+
+Comportamientos a propósito que, sin saberlos, pueden parecer errores:
+
+- **Formatos permitidos:** PNG, JPEG, GIF, WebP, PDF y texto plano. Cualquier otro (incluidos
+  HTML y SVG) da **415**.
+- **Tamaño máximo:** 20 MB por archivo (configurado en `application.properties`). Si se supera,
+  da **413**.
+- **Nombres repetidos:** al subir un archivo con un nombre que el usuario ya tiene, se guarda
+  numerado (`foto.png` → `foto (1).png`). Al renombrar, en cambio, un nombre repetido da **409**.
+- **Revisiones:** tienen que tener el mismo formato que el archivo (un PNG solo acepta otro PNG).
+  Si no, da **400**.
+- **Archivos de otro usuario:** responden **404**, como si no existieran.
+
+| Código | Cuándo |
+|---|---|
+| 400 | Dato inválido, archivo vacío, revisión de otro formato, header faltante o id mal formado |
+| 401 | `X-User-Id` no corresponde a una persona registrada |
+| 404 | El archivo o la revisión no existen, o son de otro usuario |
+| 409 | Nombre o correo repetido, o `version` desactualizada |
+| 413 | El archivo supera los 20 MB |
+| 415 | Formato no permitido |
+
+Los errores se devuelven en formato `ProblemDetail` (RFC 7807).
+
 ## Endpoints
 
 | Método | Ruta | Qué hace |
@@ -86,8 +111,6 @@ alguien lo modificó en el medio, la respuesta es **409**.
 | `GET` | `/api/archivos/{id}/revisiones` | Historial de revisiones (`?limite=`, de 1 a 100) |
 | `GET` | `/api/archivos/{id}/revisiones/{numero}/contenido` | Contenido de una revisión |
 
-Los errores se devuelven en formato `ProblemDetail` (RFC 7807). La tabla de códigos está en el
-DESIGN.md.
 
 ## Estructura
 
