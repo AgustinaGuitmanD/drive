@@ -10,8 +10,8 @@ import java.io.InputStream;
  */
 public interface IBlobStorage {
 
-    // Guarda los bytes y devuelve la clave con la que después se los encuentra.
-    String guardar(InputStream contenido);
+    // Guarda los bytes y devuelve la clave, el hash SHA-256 y el tamaño de lo que se escribió.
+    BlobGuardado guardar(InputStream contenido);
 
     // Devuelve los bytes guardados con esa clave, listos para mandar al navegador.
     Resource abrir(String storageKey);
